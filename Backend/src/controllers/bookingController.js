@@ -350,39 +350,10 @@ exports.completeJob = async (req, res) => {
 // @desc    Get All Bookings for Logged In User or Vendor
 // @route   GET /api/booking/my-bookings
 // @access  Private
-exports.getMyBookings = async (req, res) => {
-  try {
-    const userId = req.user._id;
-
-    // Logic: Agar User hai toh 'customer' field check karega
-    // Agar Vendor hai toh 'vendor' field check karega
-    // Hum $or use karenge taaki ek hi API dono ke liye kaam kare
-    const bookings = await Booking.find({
-      $or: [
-        { customer: userId }, 
-        { vendor: userId }
-      ]
-    })
-    .populate('customer', 'name phone email') // Customer ka data dikhao
-    .populate('vendor', 'name phone serviceType isVerified') // Vendor ka data dikhao
-    .sort({ createdAt: -1 }); // Latest sabse upar
-
-    res.status(200).json({
-      success: true,
-      count: bookings.length,
-      bookings
-    });
-
-  } catch (error) {
-    console.error("Get Bookings Error:", error);
-    res.status(500).json({ message: 'Server Error', error: error.message });
-  }
-};
-
 // @desc    Get Single Booking Details by ID
 // @route   GET /api/booking/:id
 // @access  Private
-exports.getBookingDetails = async (req, res) => {
+exports.getBookingDetails = async (req, res) => { // 👈 Yahan naam change kar diya
   try {
     const booking = await Booking.findById(req.params.id)
       .populate('customer', 'name phone email')
@@ -392,12 +363,11 @@ exports.getBookingDetails = async (req, res) => {
       return res.status(404).json({ message: 'Booking not found' });
     }
 
-    // Security Check: Sirf wahi banda dekh paye jo is booking se juda hai (User ya Vendor)
-    // Admin ke liye tum alag check laga sakte ho agar chaho toh
-    if (
-      booking.customer._id.toString() !== req.user._id.toString() && 
-      (!booking.vendor || booking.vendor._id.toString() !== req.user._id.toString())
-    ) {
+    // Security Check: Sirf wahi banda dekh paye jo is booking se juda hai
+    const isCustomer = booking.customer._id.toString() === req.user._id.toString();
+    const isVendor = booking.vendor && booking.vendor._id.toString() === req.user._id.toString();
+
+    if (!isCustomer && !isVendor && req.user.role !== 'admin') {
       return res.status(401).json({ message: 'Not authorized to view this booking' });
     }
 
@@ -408,6 +378,42 @@ exports.getBookingDetails = async (req, res) => {
 
   } catch (error) {
     console.error("Booking Details Error:", error);
+    res.status(500).json({ message: 'Server Error', error: error.message });
+  }
+};
+
+// @desc    Get Single Booking Details by ID
+// @route   GET /api/booking/:id
+// @access  Private
+exports.getMyBookings = async (req, res) => {
+  try {
+    // 1. Log print kar ke dekh ki ID sahi aa rahi hai ya nahi
+    console.log("Logged In User ID:", req.user._id);
+    console.log("Logged In Role:", req.user.role);
+
+    // 2. Query banao based on role
+    // Agar User hai -> toh 'customer' field check karo
+    // Agar Vendor hai -> toh 'vendor' field check karo
+    // Hum $or use karenge taaki safe rahe
+    
+    const bookings = await Booking.find({
+      $or: [
+        { customer: req.user._id }, // Main customer hu?
+        { vendor: req.user._id }    // Ya main assigned vendor hu?
+      ]
+    })
+    .populate('customer', 'name phone') // Customer ki details dikhao
+    .populate('vendor', 'name phone serviceType') // Vendor ki details dikhao
+    .sort({ createdAt: -1 }); // Newest pehle
+
+    res.status(200).json({
+      success: true,
+      count: bookings.length,
+      bookings
+    });
+
+  } catch (error) {
+    console.error("Get Bookings Error:", error);
     res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };

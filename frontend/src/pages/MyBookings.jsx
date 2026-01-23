@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import { Link } from 'react-router-dom';
 import BottomNav from '../components/layout/BottomNav';
 
@@ -11,7 +11,7 @@ const MyBookings = () => {
     const fetchBookings = async () => {
       try {
         const token = localStorage.getItem('token'); // Auth Token
-        const res = await axios.get('/api/booking/my-bookings', {
+        const res = await api.get('/booking/my-bookings', {
           headers: { Authorization: `Bearer ${token}` }
         });
         setBookings(res.data.bookings);

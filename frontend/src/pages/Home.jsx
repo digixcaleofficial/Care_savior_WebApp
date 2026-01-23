@@ -7,11 +7,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useNotifications } from '../context/NotificationContext';
+import { useNavigate } from 'react-router-dom';
 
 const Home = () => {
     const [userData, setUserData] = useState(null);
     const [role, setRole] = useState('user');
     const { addNotification } = useNotifications();
+    const navigate = useNavigate();
 
     const testNotif = () => {
         addNotification({

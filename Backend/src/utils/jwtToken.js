@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-
+if (!process.env.JWT_SECRET) require('dotenv').config();
 // Token create karke cookie mein save karne wala function
 const sendToken = (user, statusCode, res) => {
   

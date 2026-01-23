@@ -15,7 +15,9 @@ const app = express();
 // Middlewares
 
 app.use(express.json()); // JSON data padhne ke liye
-app.use(cors({ origin: "*" })); // Frontend connect karne ke liye
+app.use(cors({ origin: "*",
+  credentials: true
+})); // Frontend connect karne ke liye
 app.use(helmet()); // Security headers add karne ke liye
 app.use(morgan('dev'));
 app.use(cookieParser()); // Console mein request logs dikhane ke liye

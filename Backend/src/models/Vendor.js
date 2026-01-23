@@ -34,6 +34,12 @@ const vendorSchema = new mongoose.Schema({
     required: [true, 'Please add an address']
   },
 
+  role: {
+    type: String,
+    default: 'vendor', // Hardcoded default
+    immutable: true // Koi change na kar paye
+  },
+
   // Admin Verification Logic
   isVerified: {
     type: Boolean,

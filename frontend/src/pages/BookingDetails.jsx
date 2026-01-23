@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import axios from '../services/api'; // 👈 Use your configured API instance
 import BookingStatusStepper from '../components/BookingStatusStepper';
 import BottomNav from '../components/layout/BottomNav';
+import toast from 'react-hot-toast'; // Alerts ki jagah Toast use karo
 
 const BookingDetails = () => {
   const { id } = useParams();
@@ -14,22 +15,21 @@ const BookingDetails = () => {
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // 1. Fetch Booking Data
+  // 1. Fetch Booking Data & Set User
   const fetchBooking = async () => {
     try {
-      const token = localStorage.getItem('token');
-      // LocalStorage se user nikal rahe hain
-      const user = JSON.parse(localStorage.getItem('userInfo')); 
-      setCurrentUser(user);
+      // 🛑 FIX 1: LocalStorage Key Check (User ya UserInfo dono check karo)
+      const storedUser = localStorage.getItem('user') || localStorage.getItem('userInfo');
+      const parsedUser = storedUser ? JSON.parse(storedUser) : null;
+      setCurrentUser(parsedUser);
 
-      const res = await axios.get(`/api/booking/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // API Call
+      const res = await axios.get(`/booking/${id}`); // api.js use kar rahe ho to full path mat likho
       setBooking(res.data.booking);
-      setLoading(false);
     } catch (err) {
-      console.error(err);
-      // alert('Failed to load booking'); // Commented out to avoid annoyance
+      console.error("Fetch Error:", err);
+      toast.error('Failed to load booking details');
+    } finally {
       setLoading(false);
     }
   };
@@ -40,74 +40,76 @@ const BookingDetails = () => {
 
   const handleVerifyOTP = async () => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.post('/api/booking/start-job', 
-        { bookingId: id, otp: otpInput },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      alert('OTP Verified! Job Started.'); 
+      await axios.post('/booking/start-job', { bookingId: id, otp: otpInput });
+      toast.success('OTP Verified! Job Started.'); 
       setShowOtpModal(false);
-      fetchBooking(); 
+      fetchBooking(); // Refresh data
     } catch (err) {
-      alert(err.response?.data?.message || 'Invalid OTP');
+      toast.error(err.response?.data?.message || 'Invalid OTP');
     }
   };
 
   const handleCompleteJob = async () => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.post('/api/booking/complete-job', 
-        { bookingId: id, finalAmount: booking.fare.estimated, paymentMode: 'cash' },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      alert('Job Completed Successfully!');
+      await axios.post('/booking/complete-job', { 
+        bookingId: id, 
+        finalAmount: booking.fare.estimated, 
+        paymentMode: 'cash' 
+      });
+      toast.success('Job Completed Successfully!');
       fetchBooking();
     } catch (err) {
-      alert('Error completing job');
+      toast.error('Error completing job');
     }
   };
 
   const handleCancel = async () => {
       if(!window.confirm("Are you sure you want to cancel this booking?")) return;
       try {
-        const token = localStorage.getItem('token');
-        await axios.put('/api/booking/cancel', 
-            { bookingId: id, reason: 'User requested cancellation' },
-            { headers: { Authorization: `Bearer ${token}` } }
-        );
-        alert('Booking Cancelled');
+        await axios.put('/booking/cancel', { bookingId: id, reason: 'User requested cancellation' });
+        toast.success('Booking Cancelled');
         fetchBooking();
       } catch (error) {
-          alert('Error cancelling booking');
+        toast.error('Error cancelling booking');
       }
   };
 
-  if (loading) return <div className="flex h-screen justify-center items-center">Loading...</div>;
-  if (!booking) return <div className="p-10 text-center">Booking not found.</div>;
+  if (loading) return <div className="flex h-screen justify-center items-center text-primary">Loading Details...</div>;
+  if (!booking) return <div className="p-10 text-center text-red-500">Booking not found.</div>;
 
   // ============================================================
-  // 👇 MAIN FIX: ID COMPARISON LOGIC (String Convert kiya hai)
+  // 👇 ROBUST MATCHING LOGIC (Senior Dev Style)
   // ============================================================
   
-  // Debugging ke liye Console check karna agar fir bhi dikkat aaye
-  console.log("Current User ID:", currentUser?._id);
-  console.log("Customer ID:", booking.customer?._id);
-  
-  const isUser = currentUser && booking.customer && (String(currentUser._id) === String(booking.customer._id));
-  
-  const isVendor = currentUser && booking.vendor && (String(currentUser._id) === String(booking.vendor._id));
+  // Helper to safely get ID string
+  const getID = (obj) => {
+    if (!obj) return null;
+    return typeof obj === 'string' ? obj : obj._id;
+  };
+
+  const currentUserId = getID(currentUser);
+  const customerId = getID(booking.customer);
+  const vendorId = getID(booking.vendor);
+
+  // String comparison to avoid ObjectId object mismatch
+  const isUser = currentUserId && customerId && String(currentUserId) === String(customerId);
+  const isVendor = currentUserId && vendorId && String(currentUserId) === String(vendorId);
+
+  // Debug Logs (Console mein dekhna agar ab bhi na dikhe)
+  console.log(`Matching Logic: UserID(${currentUserId}) vs CustomerID(${customerId}) -> Match? ${isUser}`);
 
   return (
-    <div className="pb-24 bg-gray-50 min-h-screen">
+    <div className="pb-24 bg-gray-50 min-h-screen font-sans">
       
       {/* Header */}
-      <div className="bg-white p-4 shadow sticky top-0 z-10 flex items-center">
-          <button onClick={() => navigate(-1)} className="mr-4 text-xl font-bold">←</button>
-          <h1 className="text-lg font-bold">Booking #{booking._id.slice(-6).toUpperCase()}</h1>
+      <div className="bg-white p-4 shadow-sm sticky top-0 z-10 flex items-center">
+          <button onClick={() => navigate(-1)} className="mr-4 p-2 hover:bg-gray-100 rounded-full">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+          </button>
+          <h1 className="text-lg font-bold text-gray-800">Booking #{booking._id.slice(-6).toUpperCase()}</h1>
       </div>
 
-      <div className="max-w-md mx-auto p-4">
+      <div className="max-w-md mx-auto p-4 animate-fade-in">
             
             {/* Status Bar */}
             <BookingStatusStepper status={booking.status} />
@@ -118,14 +120,18 @@ const BookingDetails = () => {
                 {/* Service Info */}
                 <div className="flex justify-between items-start">
                     <div>
-                        <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Service</span>
+                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Service</span>
                         <h2 className="text-2xl font-bold text-gray-800">{booking.serviceType}</h2>
-                        <p className="text-sm text-gray-500 mt-1">For: {booking.patientDetails.name} ({booking.patientDetails.gender})</p>
+                        {booking.patientDetails && (
+                            <p className="text-sm text-gray-500 mt-1">
+                                For: {booking.patientDetails.name} <span className='text-xs bg-gray-100 px-2 py-0.5 rounded-full'>{booking.patientDetails.gender}</span>
+                            </p>
+                        )}
                     </div>
                     <div className="text-right">
-                        <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Price</span>
-                        <p className="text-xl font-bold text-green-600">₹{booking.fare.estimated}</p>
-                        <p className="text-xs text-gray-400">{booking.payment.mode}</p>
+                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Price</span>
+                        <p className="text-xl font-bold text-green-600">₹{booking.fare?.estimated || 0}</p>
+                        <p className="text-[10px] text-gray-400 uppercase">{booking.payment?.mode || 'Cash'}</p>
                     </div>
                 </div>
 
@@ -133,50 +139,47 @@ const BookingDetails = () => {
 
                 {/* Location */}
                 <div>
-                    <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Location</span>
-                    <p className="text-gray-700 font-medium mt-1">📍 {booking.location.address}</p>
+                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Location</span>
+                    <p className="text-gray-700 font-medium mt-1 text-sm leading-relaxed">📍 {booking.location?.address}</p>
                 </div>
             </div>
 
             {/* ================= USER INTERFACE ================= */}
             {isUser && (
-                <div className="mt-6 animate-fade-in">
+                <div className="mt-6">
                     
                     {/* CASE 1: Pending */}
-                    {booking.status === 'pending' && (
+                    {(booking.status === 'pending' || booking.status === 'queued') && (
                         <div className="space-y-3">
-                             <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200 text-yellow-800 text-sm">
-                                ⏳ Searching for nearby vendors...
+                             <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200 text-yellow-800 text-xs flex items-center gap-2">
+                                <span className="animate-pulse">⏳</span> Searching for nearby vendors...
                              </div>
                              <div className="flex gap-3">
-                                <button onClick={handleCancel} className="flex-1 py-3 border border-red-500 text-red-500 rounded-xl font-bold hover:bg-red-50">Cancel</button>
-                                <button className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold">Edit Details</button>
+                                <button onClick={handleCancel} className="flex-1 py-3 border border-red-200 text-red-500 rounded-xl font-bold text-sm hover:bg-red-50 transition">Cancel Request</button>
+                                {/* Edit logic yahan connect karna padega */}
+                                <button onClick={() => navigate('/book-service', { state: { existingData: booking, editMode: true } })} className="flex-1 py-3 bg-white border border-gray-200 text-gray-700 rounded-xl font-bold text-sm hover:bg-gray-50 transition">Edit Details</button>
                              </div>
                         </div>
                     )}
 
                     {/* CASE 2: Accepted -> SHOW OTP */}
                     {booking.status === 'accepted' && (
-                        <div className="bg-blue-600 text-white p-6 rounded-2xl shadow-lg text-center transform scale-100 transition-transform">
-                            <p className="text-sm font-medium opacity-80 mb-2">GIVE THIS OTP TO VENDOR</p>
-                            <div className="bg-white text-blue-600 text-5xl font-mono font-black tracking-widest py-3 rounded-xl shadow-inner mb-2">
+                        <div className="bg-gradient-to-r from-blue-600 to-blue-500 text-white p-6 rounded-2xl shadow-lg text-center mt-4">
+                            <p className="text-[10px] font-bold opacity-80 mb-3 tracking-widest uppercase">Share OTP with Vendor</p>
+                            <div className="bg-white text-blue-600 text-4xl font-mono font-black tracking-[0.2em] py-4 rounded-xl shadow-sm mb-3 select-all">
                                 {booking.otp?.code || '----'}
                             </div>
-                            <p className="text-xs opacity-70">Vendor: {booking.vendor?.name} is arriving.</p>
+                            <div className="flex items-center justify-center gap-2 text-xs opacity-90">
+                                <span>Vendor arriving:</span>
+                                <span className="font-bold bg-white/20 px-2 py-0.5 rounded">{booking.vendor?.name}</span>
+                            </div>
                         </div>
                     )}
 
                     {/* CASE 3: In Progress */}
                     {booking.status === 'in_progress' && (
-                         <div className="bg-green-100 border border-green-300 p-4 rounded-xl text-center text-green-800 font-bold">
-                            🚑 Service in Progress
-                         </div>
-                    )}
-
-                     {/* CASE 4: Cancelled */}
-                     {booking.status === 'cancelled' && (
-                         <div className="bg-red-100 border border-red-300 p-4 rounded-xl text-center text-red-800 font-bold">
-                            ❌ Booking Cancelled
+                         <div className="bg-green-50 border border-green-200 p-4 rounded-xl text-center text-green-700 font-bold text-sm mt-4">
+                            🚑 Service is currently in progress
                          </div>
                     )}
                 </div>
@@ -184,25 +187,25 @@ const BookingDetails = () => {
 
             {/* ================= VENDOR INTERFACE ================= */}
             {isVendor && (
-                <div className="mt-6 animate-fade-in space-y-4">
+                <div className="mt-6 space-y-4">
                     
                     {/* CASE 1: Accepted -> Verify OTP Button */}
                     {booking.status === 'accepted' && (
                         <>
-                            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                                <p className="text-sm text-blue-800">Reach location & verify OTP.</p>
+                            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 text-sm text-blue-800">
+                                ℹ️ Please reach the location and ask the customer for the OTP to start the job.
                             </div>
                             
                             <button 
                                 onClick={() => setShowOtpModal(true)}
                                 className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:bg-indigo-700 active:scale-95 transition"
                             >
-                                🔢 Verify OTP & Start Job
+                                🔢 Enter OTP & Start
                             </button>
 
                             <button 
                                 onClick={handleCancel}
-                                className="w-full bg-white border border-red-200 text-red-500 py-3 rounded-xl font-bold hover:bg-red-50"
+                                className="w-full bg-white border border-red-200 text-red-500 py-3 rounded-xl font-bold text-sm hover:bg-red-50"
                             >
                                 Cancel Job
                             </button>
@@ -224,30 +227,30 @@ const BookingDetails = () => {
 
       {/* --- OTP POPUP MODAL --- */}
       {showOtpModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50 px-4">
-            <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-sm transform transition-all scale-100">
-                <h3 className="text-xl font-bold mb-2 text-center text-gray-800">Verify Customer OTP</h3>
-                <p className="text-center text-gray-500 text-sm mb-6">Enter the 4-digit code shown on customer's phone</p>
+        <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50 px-4 animate-in fade-in duration-200">
+            <div className="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-sm">
+                <h3 className="text-xl font-bold mb-2 text-center text-gray-800">Verify OTP</h3>
+                <p className="text-center text-gray-500 text-xs mb-6">Ask customer for the 4-digit code</p>
                 
                 <input 
                     type="number" 
                     autoFocus
                     placeholder="0000"
-                    className="w-full text-center text-4xl font-mono tracking-[0.5em] border-b-2 border-indigo-200 py-3 focus:border-indigo-600 outline-none transition-colors"
+                    className="w-full text-center text-4xl font-mono tracking-[0.5em] border-b-2 border-indigo-200 py-3 focus:border-indigo-600 outline-none transition-colors mb-8"
                     value={otpInput}
                     onChange={(e) => setOtpInput(e.target.value)}
                 />
                 
-                <div className="flex gap-3 mt-8">
+                <div className="flex gap-3">
                     <button 
                         onClick={() => setShowOtpModal(false)}
-                        className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200"
+                        className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold text-sm hover:bg-gray-200"
                     >
                         Close
                     </button>
                     <button 
                         onClick={handleVerifyOTP}
-                        className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-md hover:bg-indigo-700"
+                        className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm shadow-md hover:bg-indigo-700"
                     >
                         Verify
                     </button>
