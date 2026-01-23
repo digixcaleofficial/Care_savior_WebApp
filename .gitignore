@@ -1,0 +1,36 @@
+# Dependencies (Sabse Important)
+node_modules/
+*/node_modules/
+
+# Environment Variables (Secrets - Kabhi upload mat karna)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+*.env.*
+
+# Production Build (Frontend - Vite/React)
+dist/
+build/
+out/
+
+# Backend Logs & Runtime files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs
+*.log
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# System Files (Mac/Windows ka kachra)
+.DS_Store
+Thumbs.db
+
+# IDE Settings (VS Code wagera)
+.vscode/
+.idea/
