@@ -4,7 +4,7 @@ const { registerUser,
     registerVendor, 
     sendOtp,   // 👈 New
     verifyOtp,
-    logoutUser } = require('./../controllers/authcontroller');
+    logoutUser } = require('./../controllers/authController');
 
 
 router.post('/send-otp', sendOtp);
