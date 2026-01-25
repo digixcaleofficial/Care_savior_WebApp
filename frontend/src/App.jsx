@@ -8,10 +8,11 @@ import Notifications from './pages/Notifications';
 import IncomingRequestPopup from './components/IncomingRequestPopup';
 import MyBookings from './pages/MyBookings';      // 👈 List Wala Page
 import BookingDetails from './pages/BookingDetails';
-// import ProfileLayout from './components/layout/ProfileLayout';
-// import Dashboard from './pages/profile/Dashboard';
-// import History from './pages/profile/History';
-// import EditProfile from './pages/profile/EditProfile';
+import ProtectedRoute from './components/ProtectedRoute';
+import ProfileLayout from './components/layout/ProfileLayout';
+import Dashboard from './pages/profile/Dashboard';
+import History from './pages/profile/History';
+import EditProfile from './pages/profile/EditProfile';
 
 function App() {
   return (
@@ -29,18 +30,34 @@ function App() {
       <Route path="/complete-profile" element={<CompleteProfile />} />
 
       {/* == Main App Routes == */}
-      <Route path="/book-service" element={<BookingRequest />} />
-      <Route path="/notifications" element={<Notifications />} />
-      <Route path="/my-bookings" element={<MyBookings />} />
-      <Route path="/booking/:id" element={<BookingDetails />} />
-      {/* <Route path="/profile" element={<ProfileLayout />}>
+      <Route path="/book-service" element={
+        <ProtectedRoute>
+          <BookingRequest />
+        </ProtectedRoute>
+      } />
+      <Route path="/notifications" element={
+        <ProtectedRoute>
+        <Notifications />  
+        </ProtectedRoute>} />
+      <Route path="/my-bookings" element={
+        <ProtectedRoute>
+          <MyBookings />
+        </ProtectedRoute>} />
+      <Route path="/booking/:id" element={
+        <ProtectedRoute>
+          <BookingDetails />
+        </ProtectedRoute>} />
+      <Route path="/profile" element={<ProfileLayout />}>
           {/* Default: Agar sirf /profile khola toh Dashboard pe bhej do */}
-          {/* <Route index element={<Navigate to="dashboard" replace />} />
+          <Route index element={<Navigate to="dashboard" replace />} />
           
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="history" element={<History />} />
-          <Route path="edit" element={<EditProfile />} /> */}
-
+          <Route path="dashboard" element={
+            <ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="history" element={
+            <ProtectedRoute><History /></ProtectedRoute>} />
+          <Route path="edit" element={
+            <ProtectedRoute><EditProfile /></ProtectedRoute>} />
+      </Route>
       {/* Redirect Unknown to Login */}
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>

@@ -8,6 +8,7 @@ const { registerUser,
     getMe, 
     updateDetails, 
     deleteAccount } = require('./../controllers/authController');
+const { protect } = require('../middlewares/authMiddleware');
 
 
 router.post('/send-otp', sendOtp);
@@ -18,10 +19,10 @@ router.post('/register-user', registerUser);
 // Vendor Registration Route
 router.post('/register-vendor', registerVendor);
 
-router.get('/me', getMe);           // Load Profile
-router.put('/updatedetails', updateDetails); // Edit Profile
+router.get('/me', protect, getMe);           // Load Profile
+router.put('/updatedetails', protect, updateDetails); // Edit Profile
 router.get('/logout', logoutUser);
-router.delete('/delete', deleteAccount);
+router.delete('/delete', protect, deleteAccount);
 
 
 

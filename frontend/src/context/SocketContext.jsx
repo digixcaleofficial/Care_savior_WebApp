@@ -3,7 +3,7 @@ import io from 'socket.io-client';
 import { useNotifications } from './NotificationContext';
 
 const SocketContext = createContext();
-const ENDPOINT = "http://localhost:5000"; 
+const ENDPOINT = "https://care-savior-backend.onrender.com"; 
 
 export const SocketProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);

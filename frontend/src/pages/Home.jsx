@@ -39,8 +39,17 @@ const Home = () => {
                 {/* Right: Role Based Action */}
                 <div>
                     {role === 'user' ? (
-                        <Button onClick={() => navigate('/book-service', {state: { booking: response.data.booking }})} size="sm" className="bg-primary hover:bg-blue-700 rounded-full px-5 text-xs font-bold shadow-md shadow-blue-100">
-                            Book Service
+                        <Button
+                            // 🛑 CHANGE 1: Logic Check
+                            // Agar userData exist karta hai (Login hai) -> Book Service
+                            // Agar nahi hai (Guest hai) -> Login Page
+                            onClick={() => userData ? navigate('/book-service') : navigate('/login')}
+
+                            size="sm"
+                            className="bg-primary hover:bg-blue-700 rounded-full px-5 text-xs font-bold shadow-md shadow-blue-100"
+                        >
+                            {/* 🛑 CHANGE 2: Button Text */}
+                            {userData ? "Book Service" : "Login / Signup"}
                         </Button>
                     ) : (
                         <div className="flex items-center gap-1 text-slate-500 text-[11px] font-semibold bg-slate-100 px-3 py-1.5 rounded-full">

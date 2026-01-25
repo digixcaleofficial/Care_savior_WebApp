@@ -12,20 +12,23 @@ import {
 import api from '../services/api'; 
 import toast, { Toaster } from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Loader2, ArrowLeft, Stethoscope, MapPin, Navigation } from 'lucide-react';
+import { Loader2, ArrowLeft, Stethoscope, MapPin, Navigation, Keyboard } from 'lucide-react';
 
 const CompleteProfile = () => {
+  // 🆕 1. ADD LOCATION MODE STATE
+  const [locationMode, setLocationMode] = useState('manual'); // 'manual' | 'gps'
+
   const [formData, setFormData] = useState({ 
     name: '', 
     email: '', 
     address: '',
     serviceType: '',
-    latitude: null,  // 👈 Coordinates save karne ke liye
+    latitude: null,
     longitude: null
   });
   
   const [loading, setLoading] = useState(false);
-  const [locationLoading, setLocationLoading] = useState(false); // Location fetch loader
+  const [locationLoading, setLocationLoading] = useState(false);
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -38,8 +41,9 @@ const CompleteProfile = () => {
   }
 
   const handleChange = (e) => {
-    // Agar user manual edit kar raha hai, toh purane coordinates hata do
+    // Agar address type kar raha hai, toh Manual mode activate karo
     if (e.target.name === 'address') {
+        setLocationMode('manual');
         setFormData({ ...formData, address: e.target.value, latitude: null, longitude: null });
     } else {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -50,20 +54,19 @@ const CompleteProfile = () => {
     setFormData({ ...formData, serviceType: value });
   };
 
-  // === 📍 FEATURE 1: GET CURRENT LOCATION (GPS) ===
-// === 📍 1. GPS LOCATION: HIGH ACCURACY FIX ===
-// === 📍 1. GPS LOCATION: HIGH ACCURACY FIX ===
+  // === 📍 2. GPS LOCATION (Updated Logic) ===
   const handleCurrentLocation = () => {
     if (!navigator.geolocation) {
         return toast.error("Geolocation is not supported by your browser");
     }
 
+    setLocationMode('gps'); // Switch to GPS mode
     setLocationLoading(true);
 
     const geoOptions = {
-        enableHighAccuracy: true, // 👈 Satellite GPS ko trigger karega
-        timeout: 10000,           // 10 seconds tak wait karega
-        maximumAge: 0             // Purani cached location use nahi karega
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
     };
 
     navigator.geolocation.getCurrentPosition(
@@ -71,7 +74,7 @@ const CompleteProfile = () => {
             const { latitude, longitude } = position.coords;
             
             try {
-                // Address fetch karte waqt zoom level 18 (Exact building level) rakha hai
+                // Reverse Geocoding to show text
                 const response = await fetch(
                     `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18`
                 );
@@ -85,25 +88,31 @@ const CompleteProfile = () => {
                 }));
                 toast.success("Exact location locked!");
             } catch (error) {
-                toast.error("Connected to GPS but failed to fetch address text.");
+                // Agar address text fail hua, coordinates toh mil gaye na
+                setFormData(prev => ({ ...prev, latitude, longitude }));
+                toast.success("GPS Coordinates Locked!");
             } finally {
                 setLocationLoading(false);
             }
         },
         (error) => {
             setLocationLoading(false);
-            if (error.code === 1) toast.error("Please allow location access in your browser settings.");
-            else toast.error("GPS signal weak. Move near a window or type manually.");
+            setLocationMode('manual'); // Fallback
+            if (error.code === 1) toast.error("Please allow location access.");
+            else toast.error("GPS signal weak. Switching to Manual.");
         },
         geoOptions
     );
   };
 
-  // === 🗺️ 2. MANUAL ENTRY: REFINED GEOCODING ===
+  // === 🗺️ 3. SMART GEOCODING (Fix for 'Balajinagar, Pune') ===
   const getCoordinatesFromAddress = async (addressText) => {
       try {
-          // India bias add kiya hai aur search limit 1 rakhi hai
-          const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addressText)}&countrycodes=in&limit=1`;
+          // Trick: Agar user ne 'India' nahi likha, toh hum jod dete hain
+          // Isse 'Balajinagar' Telangana wala nahi, balki Pune wala milega agar context sahi ho
+          const query = addressText.toLowerCase().includes('india') ? addressText : `${addressText}, India`;
+          
+          const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
           const response = await fetch(url);
           const data = await response.json();
           
@@ -120,7 +129,7 @@ const CompleteProfile = () => {
       }
   };
 
-  // === 🚀 3. UPDATED REGISTRATION LOGIC ===
+  // === 🚀 4. HANDLE REGISTER ===
   const handleRegister = async (e) => {
     e.preventDefault();
     if (!formData.name || !formData.email || !formData.address) return toast.error("Fill all details");
@@ -129,24 +138,49 @@ const CompleteProfile = () => {
     let finalLat = formData.latitude;
     let finalLng = formData.longitude;
 
-    if (!finalLat || !finalLng) {
-        toast("📍 Locating address...", { icon: '🗺️' });
+    // Logic: Agar Manual Mode hai ya Coordinates missing hain -> Geocode karo
+    if (locationMode === 'manual' || !finalLat || !finalLng) {
+        toast("📍 Validating address...", { icon: '🔍' });
         const coords = await getCoordinatesFromAddress(formData.address);
+        
         if (coords) {
             finalLat = coords.lat;
             finalLng = coords.lon;
         } else {
             setLoading(false);
-            return toast.error("Could not find address on map! Please click the blue Arrow Icon for GPS.");
+            return toast.error("Address not found! Try adding City name (e.g. Balajinagar, Pune)");
         }
     }
 
     try {
       const endpoint = isVendor ? '/auth/register-vendor' : '/auth/register-user';
-      await api.post(endpoint, { ...formData, latitude: finalLat, longitude: finalLng, phone, otp });
-      toast.success(`Welcome!`);
-      navigate('/'); 
+      
+      const response = await api.post(endpoint, { 
+          ...formData, 
+          latitude: finalLat, 
+          longitude: finalLng, 
+          phone, 
+          otp 
+      });
+
+      if (response.data.token) {
+          localStorage.setItem('token', response.data.token);
+          localStorage.setItem('user', JSON.stringify(response.data.user));
+          
+          toast.success(`Welcome, ${formData.name}!`);
+          
+          if (isVendor) {
+              navigate('/profile');
+          } else {
+              navigate('/book-service');
+          }
+      } else {
+          toast.success("Registration Successful! Please Login.");
+          navigate('/login');
+      }
+
     } catch (error) {
+      console.error(error);
       toast.error(error.response?.data?.message || "Registration Failed");
     } finally {
       setLoading(false);
@@ -185,8 +219,6 @@ const CompleteProfile = () => {
                                 <SelectItem value="doctor">Doctor</SelectItem>
                                 <SelectItem value="nurse">Nurse</SelectItem>
                                 <SelectItem value="ambulance">Ambulance Driver</SelectItem>
-                                <SelectItem value="lab">Lab Technician</SelectItem>
-                                <SelectItem value="pharmacist">Pharmacist</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -213,47 +245,62 @@ const CompleteProfile = () => {
                     />
                 </div>
 
-                {/* === LOCATION FIELD WITH AUTO DETECT === */}
+                {/* === 📍 NEW LOCATION UI WITH TOGGLE === */}
                 <div className="space-y-2">
                     <Label className="text-slate-700 font-medium flex justify-between">
                         {isVendor ? "Clinic Location" : "Home Address"}
-                        
-                        {/* Status Indicator */}
-                        {formData.latitude && (
-                            <span className="text-[10px] text-green-600 bg-green-100 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                <MapPin className="w-3 h-3" /> Location Locked
-                            </span>
-                        )}
                     </Label>
+
+                    {/* TOGGLE SWITCH */}
+                    <div className="flex bg-slate-100 p-1 rounded-lg mb-2">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setLocationMode('manual');
+                                setFormData({ ...formData, latitude: null, longitude: null }); // Reset coords
+                            }}
+                            className={`flex-1 py-2 text-xs font-bold rounded-md flex items-center justify-center gap-2 transition-all ${locationMode === 'manual' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-400'}`}
+                        >
+                            <Keyboard className="w-3 h-3" /> Manual Entry
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleCurrentLocation}
+                            className={`flex-1 py-2 text-xs font-bold rounded-md flex items-center justify-center gap-2 transition-all ${locationMode === 'gps' ? 'bg-white shadow-sm text-green-600' : 'text-slate-400'}`}
+                        >
+                            {locationLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Navigation className="w-3 h-3" />} Detect GPS
+                        </button>
+                    </div>
                     
+                    {/* INPUT FIELD */}
                     <div className="relative">
                         <Input 
                             name="address" 
                             value={formData.address}
-                            placeholder="e.g. Pune, Maharashtra" 
-                            className="h-14 bg-slate-50 border-slate-200 rounded-xl pr-12" // Padding right for icon
+                            placeholder={locationMode === 'gps' ? "Detecting location..." : "e.g. Balajinagar, Pune"} 
+                            className={`h-14 bg-slate-50 border-slate-200 rounded-xl ${locationMode === 'gps' ? 'text-green-700 font-medium' : ''}`}
                             onChange={handleChange}
                         />
-                        {/* Auto Detect Icon Button */}
-                        <button 
-                            type="button"
-                            onClick={handleCurrentLocation}
-                            disabled={locationLoading}
-                            className="absolute right-2 top-2 h-10 w-10 flex items-center justify-center bg-white border border-slate-200 rounded-lg text-primary hover:bg-blue-50 shadow-sm transition-all"
-                            title="Use Current Location"
-                        >
-                            {locationLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Navigation className="w-5 h-5" />}
-                        </button>
+                        {/* Status Icon inside Input */}
+                        {locationMode === 'gps' && !locationLoading && formData.latitude && (
+                            <div className="absolute right-3 top-4 text-green-600">
+                                <MapPin className="w-5 h-5" />
+                            </div>
+                        )}
                     </div>
-                    <p className="text-[10px] text-slate-400">
-                        Tap the arrow icon to fetch current GPS location automatically.
-                    </p>
+
+                    <div className="flex justify-between text-[10px] text-slate-400 px-1">
+                         <span>
+                            {locationMode === 'gps' && formData.latitude ? '✅ GPS Locked Successfully' : '✍️ We will find this location on map'}
+                         </span>
+                    </div>
                 </div>
 
                 <div className="mt-8">
                     <Button 
                         type="submit" 
                         className={`w-full h-14 text-lg font-bold rounded-xl shadow-lg transition-all ${isVendor ? 'bg-green-600 hover:bg-green-700' : 'bg-primary hover:bg-blue-700'}`}
+                        disabled={loading}
                     >
                         {loading ? <Loader2 className="animate-spin" /> : "Register"}
                     </Button>

@@ -4,9 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import api from '../services/api'; // ✅ Correct API Import
+import api from '../services/api'; 
 import toast, { Toaster } from 'react-hot-toast';
-import { ArrowLeft, Stethoscope, Ambulance, Pill, MapPin, Loader2 } from 'lucide-react';
+import { ArrowLeft, Stethoscope, Ambulance, Pill, MapPin, Loader2, Minus, Maximize2, Navigation, Keyboard } from 'lucide-react';
 import { useSocket } from '../context/SocketContext';
 import { useNotifications } from '../context/NotificationContext';
 
@@ -16,16 +16,19 @@ const BookingRequest = () => {
     const location = useLocation();
     const { addNotification } = useNotifications();
 
-    // 🛑 CHECK EDIT MODE: Check if data was passed from BookingDetails page
     const isEditMode = location.state?.editMode || false;
     const existingData = location.state?.existingData || null;
-
     const preSelectedService = location.state?.service || 'Doctor';
 
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
     const [bookingId, setBookingId] = useState(null);
     const [isLocationLoading, setIsLocationLoading] = useState(false);
+    
+    // 🆕 NEW STATES FOR RADAR & LOCATION TOGGLE
+    const [vendorCount, setVendorCount] = useState(0);
+    const [isMinimized, setIsMinimized] = useState(false);
+    const [locationMode, setLocationMode] = useState('manual'); // 'manual' | 'gps'
 
     const [formData, setFormData] = useState({
         serviceType: preSelectedService,
@@ -42,7 +45,9 @@ const BookingRequest = () => {
     // ✅ HELPER: Convert Address String to Coordinates (Geocoding)
     const getCoordinatesFromAddress = async (addressText) => {
         try {
-            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addressText)}`);
+            // Trick: Add 'India' context for better results
+            const query = addressText.toLowerCase().includes('india') ? addressText : `${addressText}, India`;
+            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
             const data = await response.json();
             if (data && data.length > 0) {
                 return {
@@ -58,7 +63,7 @@ const BookingRequest = () => {
         }
     };
 
-    // ✅ 1. Better GPS Logic
+    // ✅ 1. GPS Logic (Only runs when User clicks 'Detect')
     const getUserLocation = () => {
         setIsLocationLoading(true);
         if (!navigator.geolocation) {
@@ -68,30 +73,53 @@ const BookingRequest = () => {
         }
 
         navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                console.log("📍 GPS Success:", pos.coords);
-                setFormData(prev => ({
-                    ...prev,
-                    latitude: pos.coords.latitude,
-                    longitude: pos.coords.longitude
-                }));
+            async (pos) => {
+                const { latitude, longitude } = pos.coords;
+                console.log("📍 GPS Success:", latitude, longitude);
+                
+                // Reverse Geocode to show address text
+                try {
+                    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+                    const data = await res.json();
+                    
+                    setFormData(prev => ({
+                        ...prev,
+                        latitude: latitude,
+                        longitude: longitude,
+                        address: data.display_name || prev.address // Auto-fill text
+                    }));
+                } catch (e) {
+                    // Fallback if reverse fails
+                    setFormData(prev => ({ ...prev, latitude, longitude }));
+                }
+
                 setIsLocationLoading(false);
-                toast.success("Location detected!");
+                toast.success("GPS Locked Successfully!");
             },
             (err) => {
                 console.warn("⚠️ GPS Failed:", err.message);
                 setIsLocationLoading(false);
-                toast("GPS timeout. Please enter address manually.", { icon: 'ℹ️' });
+                toast.error("GPS Timeout. Switching to Manual.");
+                setLocationMode('manual'); // Fallback to manual
             },
-            { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
         );
     };
 
-    // ✅ 2. INITIALIZATION LOGIC (Handle Edit vs Create)
+    // ✅ 2. Handle Location Mode Switch
+    const handleLocationModeChange = (mode) => {
+        setLocationMode(mode);
+        if (mode === 'gps') {
+            getUserLocation();
+        } else {
+            // Reset coords to force geocoding from text
+            setFormData(prev => ({ ...prev, latitude: null, longitude: null }));
+        }
+    };
+
+    // ✅ 3. Initialization
     useEffect(() => {
         if (isEditMode && existingData) {
-            // 🛑 MODE A: EDIT - Populate Form
-            console.log("✏️ Edit Mode Active. Pre-filling data...");
             setFormData({
                 serviceType: existingData.serviceType,
                 patientName: existingData.patientDetails?.name || '',
@@ -100,22 +128,20 @@ const BookingRequest = () => {
                 patientPhone: existingData.patientDetails?.phone || '',
                 patientProblem: existingData.patientDetails?.problemDescription || '',
                 address: existingData.location?.address || '',
-                // Backend stores [long, lat], so index 1 is lat, 0 is long
                 latitude: existingData.location?.coordinates?.[1] || null, 
                 longitude: existingData.location?.coordinates?.[0] || null
             });
-            setBookingId(existingData._id); // Needed for update API
+            setBookingId(existingData._id);
+            setLocationMode('manual'); // Default to manual on edit
         } else {
-            // 🟢 MODE B: CREATE - Default Logic
             const user = JSON.parse(localStorage.getItem('user'));
             if (user && user.address) {
                 setFormData(prev => ({ ...prev, address: user.address }));
             }
-            getUserLocation();
         }
     }, [isEditMode, existingData]);
 
-    // Socket Logic (Only needed for new requests)
+    // Socket Listener
     useEffect(() => {
         if (!socket) return;
         const handleAccept = (data) => {
@@ -127,7 +153,7 @@ const BookingRequest = () => {
         return () => socket.off('booking_accepted', handleAccept);
     }, [socket, navigate]);
 
-    // ✅ 3. SMART SUBMIT LOGIC (Create vs Update)
+    // ✅ 4. SUBMIT LOGIC (The Main Fix)
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -135,9 +161,15 @@ const BookingRequest = () => {
         let finalLat = formData.latitude;
         let finalLng = formData.longitude;
 
-        // Geocoding Logic (If address present but no coords)
-        if ((!finalLat || !finalLng) && formData.address) {
-            toast("Converting address to location...", { icon: '🗺️' });
+        // 🛑 MANUAL MODE LOGIC:
+        // Agar Manual Mode hai, ya Coordinates missing hain -> Geocode karo
+        if (locationMode === 'manual' || !finalLat || !finalLng) {
+            if (!formData.address) {
+                setLoading(false);
+                return toast.error("Please enter a location address.");
+            }
+
+            toast("📍 Locating address...", { icon: '🔍' });
             const coords = await getCoordinatesFromAddress(formData.address);
             
             if (coords) {
@@ -146,81 +178,105 @@ const BookingRequest = () => {
                 setFormData(prev => ({ ...prev, latitude: coords.lat, longitude: coords.lon }));
             } else {
                 setLoading(false);
-                return toast.error("Location not found. Please try a valid city name.");
+                return toast.error("Address not found! Try adding City/Area name.");
             }
-        }
-
-        if (!finalLat || !finalLng) {
-            setLoading(false);
-            return toast.error("Location required.");
         }
 
         try {
-            if (isEditMode) {
-                // 🛑 UPDATE FLOW (PUT)
-                await api.put('/booking/update', {
-                    bookingId: bookingId, // ID from state
-                    patientDetails: {
-                        name: formData.patientName,
-                        age: formData.patientAge,
-                        gender: formData.patientGender,
-                        phone: formData.patientPhone,
-                        problemDescription: formData.patientProblem
-                    },
-                    location: {
-                        address: formData.address,
-                        coordinates: [finalLng, finalLat] // [Long, Lat]
-                    }
-                });
+             // 🟢 CREATE FLOW (POST)
+             const res = await api.post('/booking/create', {
+                ...formData,
+                latitude: finalLat,
+                longitude: finalLng,
+                scheduledDate: new Date()
+            });
+
+            if (res.data.success) {
+                setBookingId(res.data.bookingId);
                 
-                toast.success("Booking Details Updated!");
-                navigate(-1); // Go back to Details Page
-            } else {
-                // 🟢 CREATE FLOW (POST)
-                const res = await api.post('/booking/create', {
-                    ...formData,
-                    latitude: finalLat,
-                    longitude: finalLng,
-                    scheduledDate: new Date()
+                // 🔢 CAPTURE VENDOR COUNT (Backend se aana chahiye)
+                const count = res.data.nearbyVendorsCount || 0; 
+                setVendorCount(count);
+                
+                setStep(2); // Show Radar
+                addNotification({
+                    title: "Request Sent",
+                    message: `Sent to ${count} nearby partners`,
+                    type: 'success',
+                    timestamp: new Date()
                 });
-
-                if (res.data.success) {
-                    setBookingId(res.data.bookingId);
-                    setStep(2); // Show Radar Screen
-                    addNotification({
-                        title: "Request Sent Successfully",
-                        message: res.data.message,
-                        type: 'success',
-                        timestamp: new Date()
-                    });
-                    toast.success("Searching for nearby providers...");
-                }
             }
-
         } catch (error) {
             console.error(error);
             toast.error(error.response?.data?.message || "Operation Failed");
-            if (!isEditMode) setStep(1);
+            setStep(1);
         } finally {
             setLoading(false);
         }
     };
 
-    // ... (Radar Screen for CREATE mode) ...
+    // ==========================================
+    // 📡 RADAR SCREEN (STEP 2) - FIXED UI
+    // ==========================================
     if (step === 2) {
-        return (
-            <div className="min-h-screen bg-white flex flex-col items-center justify-center text-center p-6">
-                <div className="relative w-32 h-32 mb-8 flex items-center justify-center">
-                    <span className="absolute w-full h-full rounded-full bg-blue-500 opacity-20 animate-ping"></span>
-                    <span className="absolute w-24 h-24 rounded-full bg-blue-500 opacity-40 animate-pulse"></span>
-                    <Loader2 className="w-12 h-12 text-primary animate-spin relative z-10" />
+        // 🔽 MINIMIZED VIEW
+        if (isMinimized) {
+            return (
+                <div className="fixed bottom-4 left-4 right-4 z-50 animate-in slide-in-from-bottom-5">
+                    <div className="bg-white p-4 rounded-xl shadow-2xl border border-slate-200 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
+                                <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-slate-800 text-sm">Finding {formData.serviceType}...</h4>
+                                <p className="text-xs text-slate-500 font-bold text-green-600">
+                                    • Contacting {vendorCount} Partners
+                                </p>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={() => setIsMinimized(false)}
+                            className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+                        >
+                            <Maximize2 className="w-5 h-5 text-slate-700" />
+                        </button>
+                    </div>
                 </div>
-                <h2 className="text-2xl font-bold text-slate-800">Finding {formData.serviceType}...</h2>
-                <p className="text-slate-500 mt-2 text-sm max-w-xs mx-auto">
-                    We have notified nearby providers. Please wait while they review your request.
-                </p>
-                <p className="mt-8 text-xs font-mono text-slate-400">ID: {bookingId}</p>
-                <Button variant="outline" className="mt-10 border-red-100 text-red-500" onClick={() => navigate('/')}>
+            );
+        }
+
+        // 🔼 FULL SCREEN VIEW
+        return (
+            <div className="min-h-screen bg-white flex flex-col items-center justify-center text-center p-6 relative">
+                
+                {/* Minimize Button */}
+                <button 
+                    onClick={() => setIsMinimized(true)}
+                    className="absolute top-6 right-6 p-2 bg-slate-50 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-800 transition-all"
+                >
+                    <Minus className="w-6 h-6" />
+                </button>
+
+                <div className="relative w-40 h-40 mb-8 flex items-center justify-center">
+                    <span className="absolute w-full h-full rounded-full bg-blue-500 opacity-10 animate-ping duration-1000"></span>
+                    <span className="absolute w-32 h-32 rounded-full bg-blue-500 opacity-20 animate-pulse delay-75"></span>
+                    <div className="relative z-10 bg-white p-2 rounded-full shadow-lg">
+                        <Loader2 className="w-16 h-16 text-primary animate-spin" />
+                    </div>
+                </div>
+
+                <h2 className="text-3xl font-black text-slate-800 tracking-tight">Finding Provider</h2>
+                
+                <div className="mt-4 bg-blue-50 px-6 py-3 rounded-2xl border border-blue-100 inline-block">
+                    <p className="text-blue-800 font-medium text-sm">
+                        Request sent to <span className="font-black text-xl">{vendorCount}</span> nearby {formData.serviceType}s
+                    </p>
+                </div>
+
+                <p className="text-slate-400 mt-8 text-xs font-mono">BOOKING ID: {bookingId}</p>
+                
+                <Button variant="ghost" className="mt-6 text-red-500 hover:bg-red-50 hover:text-red-600" onClick={() => navigate('/')}>
                     Cancel Request
                 </Button>
             </div>
@@ -233,7 +289,6 @@ const BookingRequest = () => {
             <div className="bg-white px-5 pt-6 pb-4 shadow-sm sticky top-0 z-10">
                 <div className="flex items-center gap-3">
                     <button onClick={() => navigate(-1)}><ArrowLeft className="w-6 h-6 text-slate-700" /></button>
-                    {/* Dynamic Header */}
                     <h1 className="text-xl font-bold text-slate-800">
                         {isEditMode ? "Update Request" : "Request Service"}
                     </h1>
@@ -241,7 +296,7 @@ const BookingRequest = () => {
             </div>
 
             <div className="p-5 space-y-6">
-                {/* Service Selector (Disabled in Edit Mode usually, or keep enabled if you want to allow changing service) */}
+                {/* Service Selector */}
                 <div className="grid grid-cols-3 gap-3">
                     {['Doctor', 'Nurse', 'Ambulance'].map((type) => (
                         <div
@@ -261,6 +316,7 @@ const BookingRequest = () => {
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
+                    {/* Patient Details */}
                     <div className="bg-white p-5 rounded-2xl shadow-sm space-y-4">
                         <h3 className="font-bold text-slate-800 border-b pb-2 mb-2">Patient Details</h3>
                         <div>
@@ -291,35 +347,61 @@ const BookingRequest = () => {
                         </div>
                     </div>
 
-                    {/* Location Section */}
-                    <div className="bg-white p-5 rounded-2xl shadow-sm space-y-2">
-                        <div className="flex justify-between items-center">
-                            <Label className="flex items-center gap-2"><MapPin className="w-4 h-4 text-primary" /> Location</Label>
-                            <button 
-                                type="button" 
-                                onClick={getUserLocation} 
-                                className="text-xs text-blue-500 font-bold flex items-center gap-1"
-                                disabled={isLocationLoading}
+                    {/* 📍 NEW LOCATION TOGGLE SECTION */}
+                    <div className="bg-white p-5 rounded-2xl shadow-sm space-y-4">
+                        <Label className="flex items-center gap-2 mb-1"><MapPin className="w-4 h-4 text-primary" /> Service Location</Label>
+                        
+                        {/* TOGGLE SWITCH */}
+                        <div className="flex bg-slate-100 p-1 rounded-lg">
+                            <button
+                                type="button"
+                                onClick={() => handleLocationModeChange('manual')}
+                                className={`flex-1 py-2 text-xs font-bold rounded-md flex items-center justify-center gap-2 transition-all ${locationMode === 'manual' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-400'}`}
                             >
-                                {isLocationLoading ? <Loader2 className="w-3 h-3 animate-spin"/> : <MapPin className="w-3 h-3"/>}
-                                Detect GPS
+                                <Keyboard className="w-3 h-3" /> Manual Entry
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleLocationModeChange('gps')}
+                                className={`flex-1 py-2 text-xs font-bold rounded-md flex items-center justify-center gap-2 transition-all ${locationMode === 'gps' ? 'bg-white shadow-sm text-green-600' : 'text-slate-400'}`}
+                            >
+                                <Navigation className="w-3 h-3" /> Detect GPS
                             </button>
                         </div>
-                        
-                        <Input
-                            value={formData.address}
-                            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                            placeholder="Enter detailed address (e.g. Bibewadi, Pune)"
-                            className="bg-slate-50 border-none"
-                        />
-                        <div className="flex justify-between text-[10px] text-slate-400">
-                             <span>{formData.latitude ? `✅ GPS Locked` : `⚠️ GPS Pending (Will use address)`}</span>
+
+                        {/* INPUT BOX (Hamesha dikhega, bas GPS mode mein ReadOnly ya Auto-filled hoga) */}
+                        <div className="relative">
+                            <Input
+                                value={formData.address}
+                                onChange={(e) => {
+                                    // Jab user type kare, toh 'Manual' mode samjho aur purane coordinates uda do
+                                    setLocationMode('manual');
+                                    setFormData({ 
+                                        ...formData, 
+                                        address: e.target.value,
+                                        latitude: null, // Force Geocode
+                                        longitude: null 
+                                    });
+                                }}
+                                placeholder={locationMode === 'gps' ? "Detecting location..." : "Enter detailed address (e.g. Katraj, Pune)"}
+                                className={`bg-slate-50 border-slate-200 ${locationMode === 'gps' ? 'pl-10 text-green-700 font-medium' : ''}`}
+                            />
+                            {locationMode === 'gps' && isLocationLoading && (
+                                <div className="absolute right-3 top-3">
+                                    <Loader2 className="w-4 h-4 text-green-600 animate-spin" />
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex justify-between text-[10px] text-slate-400 px-1">
+                             <span>
+                                {locationMode === 'gps' && formData.latitude ? '✅ Exact GPS Locked' : '✍️ Using Manual Address'}
+                             </span>
                         </div>
                     </div>
 
-                    {/* Dynamic Button Text */}
                     <Button type="submit" className="w-full h-14 text-lg font-bold rounded-xl shadow-lg bg-primary mt-4" disabled={loading}>
-                        {loading ? <Loader2 className="animate-spin" /> : (isEditMode ? "Update Request Details" : "Find Nearby Provider")}
+                        {loading ? <Loader2 className="animate-spin" /> : "Find Nearby Provider"}
                     </Button>
                 </form>
             </div>

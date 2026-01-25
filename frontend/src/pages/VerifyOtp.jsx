@@ -44,8 +44,9 @@ const VerifyOtp = () => {
         localStorage.setItem('user', JSON.stringify(data.user || data.vendor));
         
         toast.success("Welcome back!");
+
         // Vendor ka dashboard alag ho sakta hai, abhi ke liye home
-        navigate('/'); 
+        navigate(from, { replace: true });
       }
 
     } catch (error) {
