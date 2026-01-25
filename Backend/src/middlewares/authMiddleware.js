@@ -59,7 +59,7 @@ const isVerifiedVendor = (req, res, next) => {
     return res.status(403).json({ 
       success: false,
       message: 'Account Under Review. Please wait for Admin approval.',
-      isVerified: false 
+      // isVerified: true
     });
   }
   next();

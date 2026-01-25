@@ -43,13 +43,13 @@ const vendorSchema = new mongoose.Schema({
   // Admin Verification Logic
   isVerified: {
     type: Boolean,
-    default: false // SignUp ke baad 'Under Review' rahega
+    default: true // SignUp ke baad 'Under Review' rahega
   },
 
   // Toggle Button (Online/Offline) - Driver App jaisa
   isAvailable: {
     type: Boolean,
-    default: false 
+    default: true 
   },
 
   // ⭐ GEOSPATIAL DATA (Location Logic)

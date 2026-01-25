@@ -16,8 +16,8 @@ exports.getNearbyVendors = async (req, res) => {
 
     // 🔍 The Magic Logic (MongoDB GeoSpatial Query)
     const vendors = await Vendor.find({
-      isVerified: true, // Sirf verified vendors
-      isOnline: true,   // (Optional: Abhi ke liye comment kar sakte ho agar testing karni hai)
+      // isVerified: true, // Sirf verified vendors
+      // isOnline: true,   // (Optional: Abhi ke liye comment kar sakte ho agar testing karni hai)
       serviceType: serviceType, // Jaise "Plumber"
       location: {
         $near: {

@@ -10,7 +10,7 @@ router.patch(
   '/toggle-status', 
   protect,              // Login hona zaroori hai
   authorize('vendor'),
-  isVerifiedVendor,     // Sirf verified vendor hi access kar sakta hai
+  // isVerifiedVendor,     // Sirf verified vendor hi access kar sakta hai
   toggleVendorStatus
 );
 module.exports = router;

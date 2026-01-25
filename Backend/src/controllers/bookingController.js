@@ -6,6 +6,11 @@ const Notification = require('../models/Notification'); // 👈 Notification Mod
 // @route   POST /api/booking/create
 // @access  Private (User only)
 exports.createBooking = async (req, res) => {
+  console.log("\n--- FRONTEND REQUEST DATA ---");
+  console.log("Type:", req.body.serviceType);
+  console.log("Lat:", req.body.latitude);
+  console.log("Long:", req.body.longitude);
+  console.log("-----------------------------\n");
   try {
     const { 
       serviceType, 
@@ -119,7 +124,7 @@ exports.createBooking = async (req, res) => {
         
         console.log(`🔔 Notified Vendor (DB+Socket): ${vendor.name}`);
     }
-
+    console.log(`3. FOUND VENDORS: ${nearbyVendors.length}`);
     // Update Timeline
     newBooking.timeline.push({
       status: 'pending',

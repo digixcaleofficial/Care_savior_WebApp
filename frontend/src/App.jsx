@@ -8,6 +8,10 @@ import Notifications from './pages/Notifications';
 import IncomingRequestPopup from './components/IncomingRequestPopup';
 import MyBookings from './pages/MyBookings';      // 👈 List Wala Page
 import BookingDetails from './pages/BookingDetails';
+// import ProfileLayout from './components/layout/ProfileLayout';
+// import Dashboard from './pages/profile/Dashboard';
+// import History from './pages/profile/History';
+// import EditProfile from './pages/profile/EditProfile';
 
 function App() {
   return (
@@ -29,6 +33,13 @@ function App() {
       <Route path="/notifications" element={<Notifications />} />
       <Route path="/my-bookings" element={<MyBookings />} />
       <Route path="/booking/:id" element={<BookingDetails />} />
+      {/* <Route path="/profile" element={<ProfileLayout />}>
+          {/* Default: Agar sirf /profile khola toh Dashboard pe bhej do */}
+          {/* <Route index element={<Navigate to="dashboard" replace />} />
+          
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="history" element={<History />} />
+          <Route path="edit" element={<EditProfile />} /> */}
 
       {/* Redirect Unknown to Login */}
       <Route path="*" element={<Navigate to="/login" replace />} />

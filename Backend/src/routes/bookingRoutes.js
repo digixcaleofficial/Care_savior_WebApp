@@ -16,7 +16,7 @@ router.patch( // Update kar rahe hain isliye PATCH better hai, POST bhi chalega
   '/accept',
   protect,
   authorize('vendor'),
-  isVerifiedVendor, // Sirf Vendor accept kar sakta hai
+  // isVerifiedVendor, // Sirf Vendor accept kar sakta hai
   acceptBooking
 );
 
@@ -25,7 +25,7 @@ router.post(
   '/start-job',
   protect,
   authorize('vendor'),
-  isVerifiedVendor,
+  // isVerifiedVendor,
   startJob
 );
 
@@ -34,7 +34,7 @@ router.post(
   '/complete-job',
   protect,
   authorize('vendor'),
-  isVerifiedVendor,
+  // isVerifiedVendor,
   completeJob
 );
 

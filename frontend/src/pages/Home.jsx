@@ -12,16 +12,7 @@ import { useNavigate } from 'react-router-dom';
 const Home = () => {
     const [userData, setUserData] = useState(null);
     const [role, setRole] = useState('user');
-    const { addNotification } = useNotifications();
     const navigate = useNavigate();
-
-    const testNotif = () => {
-        addNotification({
-            title: "New Request Found!",
-            message: "Patient Rahul needs an Ambulance at Khed Shivapur (2km away).",
-            type: "info"
-        });
-    };
 
     useEffect(() => {
         // LocalStorage se data uthao
@@ -48,7 +39,7 @@ const Home = () => {
                 {/* Right: Role Based Action */}
                 <div>
                     {role === 'user' ? (
-                        <Button onClick={() => navigate('/book-service')} size="sm" className="bg-primary hover:bg-blue-700 rounded-full px-5 text-xs font-bold shadow-md shadow-blue-100">
+                        <Button onClick={() => navigate('/book-service', {state: { booking: response.data.booking }})} size="sm" className="bg-primary hover:bg-blue-700 rounded-full px-5 text-xs font-bold shadow-md shadow-blue-100">
                             Book Service
                         </Button>
                     ) : (
