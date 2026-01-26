@@ -10,9 +10,9 @@ import MyBookings from './pages/MyBookings';      // 👈 List Wala Page
 import BookingDetails from './pages/BookingDetails';
 import ProtectedRoute from './components/ProtectedRoute';
 import ProfileLayout from './components/layout/ProfileLayout';
-import Dashboard from './pages/profile/Dashboard';
-import History from './pages/profile/History';
-import EditProfile from './pages/profile/EditProfile';
+import Dashboard from './pages/Profile/Dashboard';
+import History from './pages/Profile/History';
+import EditProfile from './pages/Profile/EditProfile';
 
 function App() {
   return (
