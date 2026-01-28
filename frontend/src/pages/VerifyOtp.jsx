@@ -46,7 +46,7 @@ const VerifyOtp = () => {
         toast.success("Welcome back!");
 
         // Vendor ka dashboard alag ho sakta hai, abhi ke liye home
-        navigate(from, { replace: true });
+        navigate('/');
       }
 
     } catch (error) {

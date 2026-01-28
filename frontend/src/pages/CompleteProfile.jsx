@@ -175,8 +175,8 @@ const CompleteProfile = () => {
               navigate('/book-service');
           }
       } else {
-          toast.success("Registration Successful! Please Login.");
-          navigate('/login');
+          toast.success("Registration Successful!");
+          navigate('/');
       }
 
     } catch (error) {
